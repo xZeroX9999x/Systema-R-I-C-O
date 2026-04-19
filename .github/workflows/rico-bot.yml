@@ -1,0 +1,47 @@
+name: R-I-C-O Bot v4.0 — Reporte Semanal
+
+on:
+  schedule:
+    # Ejecuta todos los sábados a las 14:00 UTC (≈10:00 CLT en invierno, 11:00 en verano)
+    - cron: '0 14 * * 6'
+  workflow_dispatch:   # Permite ejecución manual desde la UI de GitHub
+
+jobs:
+  analizar-portafolio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Necesario para commitear el log histórico
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ejecutar R-I-C-O Bot v4.0
+        env:
+          EMAIL_DESTINO:  ${{ secrets.EMAIL_DESTINO }}
+          EMAIL_USUARIO:  ${{ secrets.EMAIL_USUARIO }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SMTP_SERVER:    ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT:      ${{ secrets.SMTP_PORT }}
+        run: python rico_bot.py
+
+      - name: Guardar log histórico
+        run: |
+          if [ -f historico_decisiones.csv ]; then
+            git config --local user.email "bot@rico.cl"
+            git config --local user.name "R-I-C-O Bot"
+            git add historico_decisiones.csv
+            git diff --cached --quiet || git commit -m "Log automatico — $(date +'%Y-%m-%d %H:%M')"
+            git push
+          fi
