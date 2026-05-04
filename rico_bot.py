@@ -29,7 +29,7 @@ from pathlib import Path
 
 # --- Clasificación de activos (CLAVE del rediseño) ---
 ETFS_CORE = ["VT", "ITOT"]
-ACCIONES_TACTICAS = ["NVDA", "IBIT", "CGW", "TTWO"]
+ACCIONES_TACTICAS = ["NVDA", "IBIT", "CGW", "TTWO" "BBAI"]
 ALL_TICKERS = ETFS_CORE + ACCIONES_TACTICAS
 
 # --- Presupuesto y asignación ---
