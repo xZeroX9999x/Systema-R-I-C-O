@@ -2,7 +2,6 @@ name: R-I-C-O Bot v5.0 — Reporte Semanal
 
 on:
   schedule:
-    # Ejecuta todos los sábados a las 14:00 UTC
     - cron: '0 14 * * 6'
   workflow_dispatch:
 
@@ -27,21 +26,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Restaurar Base de Datos (Artifact v4)
+      # PASO CRÍTICO: Crear directorio ANTES de intentar descargar
+      - name: Preparar directorio de base de datos
+        run: mkdir -p db
+
+      # Descarga tolerante a fallos (primera ejecución o artifact expirado)
+      - name: Restaurar Base de Datos (v4)
         uses: actions/download-artifact@v4
         with:
           name: posiciones-db-v5
           path: db/
-        continue-on-error: true  # CRÍTICO: Permite primera ejecución sin DB previa
+        continue-on-error: true
 
-      - name: Verificar integridad de DB
+      # Verificación explícita de estado
+      - name: Validar estado de la DB
+        id: check-db
         run: |
-          mkdir -p db
-          if [ ! -f db/posiciones.db ]; then
-            echo "⚠️ No se encontró posiciones.db. Se creará nueva en la ejecución."
+          if [ -f "db/posiciones.db" ]; then
+            echo "db_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Base de datos encontrada."
           else
-            echo "✅ Base de datos restaurada correctamente."
-            ls -lh db/posiciones.db
+            echo "db_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Base de datos NO encontrada. Se iniciará desde cero."
           fi
 
       - name: Ejecutar R-I-C-O Bot v5.0
@@ -59,16 +65,18 @@ jobs:
           DB_PATH:          db/posiciones.db
         run: python rico_bot.py
 
-      - name: Persistir Base de Datos (Artifact v4)
+      # Solo subir si el archivo existe (evita fallo en upload tras bootstrap)
+      - name: Persistir Base de Datos (v4)
+        if: hashFiles('db/posiciones.db') != ''
         uses: actions/upload-artifact@v4
         with:
           name: posiciones-db-v5
           path: db/posiciones.db
           retention-days: 90
-          if-no-files-found: error  # Falla si el bot no generó la DB
-          overwrite: true           # Reemplaza artifact anterior mismo nombre
+          overwrite: true
+          compression-level: 0  # SQLite es binario; compresión 0 = más rápido
 
-      - name: Guardar log histórico en repo
+      - name: Guardar log histórico
         run: |
           if [ -f historico_decisiones.csv ]; then
             git config --local user.email "bot@rico.cl"
