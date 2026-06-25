@@ -1,10 +1,4 @@
-# ============================================================================
-#  R-I-C-O Bot v5.0 — Módulo Raíz
-# ============================================================================
-
-# Este archivo es requerido para importaciones intra-paquete.
-# Sin él, 'from modules.config import ...' fallará.
-
+# Este archivo es OBLIGATORIO para que Python reconozca 'modules' como paquete.
 from .config import load_settings
 from .state import get_db_connection, init_db, load_positions, registrar_transacciones, actualizar_maximos
 from .technical import analizar_etf, analizar_accion, detectar_regimen_mercado, obtener_usd_clp
