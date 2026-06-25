@@ -1,4 +1,4 @@
-name: R-I-C-O Bot v4.0 — Reporte Semanal
+name: R-I-C-O Bot v5.0 — Reporte Semanal
 
 on:
   schedule:
@@ -27,13 +27,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ejecutar R-I-C-O Bot v4.0
+      - name: Descargar base de datos (si existe)
+        uses: actions/download-artifact@v3
+        with:
+          name: posiciones-db
+          path: db
+          if-no-artifact: error
+
+      - name: Ejecutar R-I-C-O Bot v5.0
         env:
           EMAIL_DESTINO:  ${{ secrets.EMAIL_DESTINO }}
           EMAIL_USUARIO:  ${{ secrets.EMAIL_USUARIO }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           SMTP_SERVER:    ${{ secrets.SMTP_SERVER }}
           SMTP_PORT:      ${{ secrets.SMTP_PORT }}
+          USD_CLP_FALLBACK: ${{ secrets.USD_CLP_FALLBACK }}
+          LLM_API_KEY:      ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL:        ${{ secrets.LLM_MODEL }}
+          COMISION:         ${{ secrets.COMISION }}
+          RISK_TARGET:      ${{ secrets.RISK_TARGET }}
         run: python rico_bot.py
 
       - name: Guardar log histórico
@@ -45,3 +57,9 @@ jobs:
             git diff --cached --quiet || git commit -m "Log automatico — $(date +'%Y-%m-%d %H:%M')"
             git push
           fi
+
+      - name: Subir base de datos
+        uses: actions/upload-artifact@v3
+        with:
+          name: posiciones-db
+          path: db/posiciones.db
