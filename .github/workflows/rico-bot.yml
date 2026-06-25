@@ -5,7 +5,7 @@ on:
     - cron: '0 14 * * 6'
   workflow_dispatch:
 
-# SOLUCIÓN A NODE 24: Permite usar Node 20 hasta otoño 2026
+# ✅ BLOQUE ENV GLOBAL - Compatibilidad Node20→24 (vigente hasta otoño 2026)
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
@@ -33,7 +33,7 @@ jobs:
       - name: Preparar directorio DB
         run: mkdir -p db
 
-      - name: Restaurar Base de Datos
+      - name: Restaurar Base de Datos (v4)
         uses: actions/download-artifact@v4
         with:
           name: posiciones-db-v5
@@ -56,7 +56,7 @@ jobs:
           DB_PATH: db/posiciones.db
         run: python rico_bot.py
 
-      - name: Persistir Base de Datos
+      - name: Persistir Base de Datos (v4)
         if: hashFiles('db/posiciones.db') != ''
         uses: actions/upload-artifact@v4
         with:
