@@ -1,59 +1,18 @@
-name: R-I-C-O Bot v5.0 — Reporte Semanal
-
-on:
-  schedule:
-    - cron: '0 14 * * 6'
-  workflow_dispatch:
-
 env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true  # Suprime warning de Node 20→24
+  # Requerido según changelog 2025-09-19 para suprimir warnings de acciones @v4
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   analizar-portafolio:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout repositorio
-        uses: actions/checkout@v4
-
-      - name: Configurar Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Instalar dependencias
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Preparar directorio de base de datos
-        run: mkdir -p db
+      # ... pasos anteriores ...
 
       - name: Restaurar Base de Datos (v4)
         uses: actions/download-artifact@v4
         with:
           name: posiciones-db-v5
           path: db/
-        continue-on-error: true  # Permite primera ejecución sin DB
-
-      - name: Ejecutar R-I-C-O Bot v5.0
-        env:
-          PYTHONPATH: ${{ github.workspace }}  # ← CLAVE: permite imports relativos
-          EMAIL_DESTINO:    ${{ secrets.EMAIL_DESTINO }}
-          EMAIL_USUARIO:    ${{ secrets.EMAIL_USUARIO }}
-          EMAIL_PASSWORD:   ${{ secrets.EMAIL_PASSWORD }}
-          SMTP_SERVER:      ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT:        ${{ secrets.SMTP_PORT }}
-          USD_CLP_FALLBACK: ${{ secrets.USD_CLP_FALLBACK }}
-          LLM_API_KEY:      ${{ secrets.LLM_API_KEY }}
-          LLM_MODEL:        ${{ secrets.LLM_MODEL }}
-          COMISION:         ${{ secrets.COMISION }}
-          RISK_TARGET:      ${{ secrets.RISK_TARGET }}
-          DB_PATH:          db/posiciones.db
-        run: python rico_bot.py
+        continue-on-error: true  # Permite bootstrap sin DB previa
 
       - name: Persistir Base de Datos
         if: hashFiles('db/posiciones.db') != ''
@@ -61,16 +20,6 @@ jobs:
         with:
           name: posiciones-db-v5
           path: db/posiciones.db
-          retention-days: 90
-          overwrite: true
-          compression-level: 0
-
-      - name: Guardar log histórico
-        run: |
-          if [ -f historico_decisiones.csv ]; then
-            git config --local user.email "bot@rico.cl"
-            git config --local user.name "R-I-C-O Bot"
-            git add historico_decisiones.csv
-            git diff --cached --quiet || git commit -m "Log automático — $(date +'%Y-%m-%d %H:%M')"
-            git push
-          fi
+          retention-days: 90     # Default oficial según FAQ
+          overwrite: true        # Requerido en v4 para actualizar mismo nombre
+          compression-level: 0   # Recomendado para SQLite (binario no compresible)
