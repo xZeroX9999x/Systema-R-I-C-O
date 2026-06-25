@@ -1,29 +1,21 @@
-# ============================================================================
-#  MÓDULO 2 — GESTIÓN DE ESTADO (TRANSACCIONAL)
-# ============================================================================
-
 import sqlite3
 import os
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from .config import load_settings  # ← Import relativo (crítico para CI)
+from .config import load_settings  # ← Import relativo (crítico)
 
 logger = logging.getLogger(__name__)
 
 
 def get_db_connection() -> sqlite3.Connection:
-    """Obtiene conexión a la base de datos SQLite."""
     settings = load_settings()
     db_path = settings['DB_PATH']
-
-    # Asegurar directorio
     db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
         os.makedirs(db_dir, exist_ok=True)
         logger.info(f"Directorio creado: {db_dir}")
-
     try:
         conn = sqlite3.connect(db_path)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -34,9 +26,7 @@ def get_db_connection() -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
-    """Inicializa el esquema de la base de datos."""
     cursor = conn.cursor()
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS posiciones (
         ticker TEXT PRIMARY KEY,
@@ -49,7 +39,6 @@ def init_db(conn: sqlite3.Connection) -> None:
         ultima_actualizacion TEXT NOT NULL
     )
     ''')
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS transacciones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,19 +52,15 @@ def init_db(conn: sqlite3.Connection) -> None:
         estado TEXT CHECK(estado IN ('PENDIENTE', 'EJECUTADA')) DEFAULT 'EJECUTADA'
     )
     ''')
-
     conn.commit()
 
 
 def load_positions(conn: sqlite3.Connection) -> Dict[str, Dict]:
-    """Carga posiciones activas."""
     init_db(conn)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT ticker, tipo, precio_compra, cantidad,
-               fecha_compra, maximo_desde_compra, estado
-        FROM posiciones
-        WHERE estado = 'ACTIVA'
+        SELECT ticker, tipo, precio_compra, cantidad, fecha_compra, maximo_desde_compra, estado
+        FROM posiciones WHERE estado = 'ACTIVA'
     """)
     return {
         row[0]: {
@@ -92,7 +77,6 @@ def load_positions(conn: sqlite3.Connection) -> Dict[str, Dict]:
 
 
 def get_historico_compras(posiciones: Dict[str, Dict]) -> Dict[str, float]:
-    """Devuelve precios de compra por ticker."""
     return {ticker: pos['precio_compra'] for ticker, pos in posiciones.items()}
 
 
@@ -103,7 +87,6 @@ def registrar_transacciones(
     usd_clp: float,
     fecha_hora: str
 ) -> None:
-    """Registra transacciones con promedio de costo."""
     cursor = conn.cursor()
     settings = load_settings()
 
@@ -120,11 +103,8 @@ def registrar_transacciones(
                 "INSERT INTO transacciones (ticker, fecha, tipo, cantidad, precio, monto, comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (ticker, fecha_hora, 'COMPRA', cantidad, precio, monto, comision)
             )
-
-            # Actualizar posición (promedio ponderado)
             cursor.execute(
-                "SELECT precio_compra, cantidad FROM posiciones WHERE ticker = ? AND estado = 'ACTIVA'",
-                (ticker,)
+                "SELECT precio_compra, cantidad FROM posiciones WHERE ticker = ? AND estado = 'ACTIVA'", (ticker,)
             )
             row = cursor.fetchone()
             if row:
@@ -153,10 +133,8 @@ def registrar_transacciones(
                 "INSERT INTO transacciones (ticker, fecha, tipo, cantidad, precio, monto, comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (ticker, fecha_hora, 'COMPRA', cantidad, precio, monto, comision)
             )
-
             cursor.execute(
-                "SELECT precio_compra, cantidad FROM posiciones WHERE ticker = ? AND estado = 'ACTIVA'",
-                (ticker,)
+                "SELECT precio_compra, cantidad FROM posiciones WHERE ticker = ? AND estado = 'ACTIVA'", (ticker,)
             )
             row = cursor.fetchone()
             if row:
@@ -178,7 +156,6 @@ def registrar_transacciones(
 
 
 def actualizar_maximos(conn: sqlite3.Connection, resultados: List[Dict], fecha_hora: str) -> None:
-    """Actualiza maximo_desde_compra para todas las posiciones activas."""
     cursor = conn.cursor()
     for r in resultados:
         ticker = r['simbolo']
