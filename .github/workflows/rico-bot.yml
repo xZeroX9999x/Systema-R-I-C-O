@@ -2,15 +2,15 @@ name: R-I-C-O Bot v5.0 — Reporte Semanal
 
 on:
   schedule:
-    # Ejecuta todos los sábados a las 14:00 UTC (≈10:00 CLT en invierno, 11:00 en verano)
+    # Ejecuta todos los sábados a las 14:00 UTC
     - cron: '0 14 * * 6'
-  workflow_dispatch:   # Permite ejecución manual desde la UI de GitHub
+  workflow_dispatch:
 
 jobs:
   analizar-portafolio:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # Necesario para commitear el log histórico
+      contents: write
 
     steps:
       - name: Checkout repositorio
@@ -27,39 +27,53 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Descargar base de datos (si existe)
-        uses: actions/download-artifact@v3
+      - name: Restaurar Base de Datos (Artifact v4)
+        uses: actions/download-artifact@v4
         with:
-          name: posiciones-db
-          path: db
-          if-no-artifact: error
+          name: posiciones-db-v5
+          path: db/
+        continue-on-error: true  # CRÍTICO: Permite primera ejecución sin DB previa
+
+      - name: Verificar integridad de DB
+        run: |
+          mkdir -p db
+          if [ ! -f db/posiciones.db ]; then
+            echo "⚠️ No se encontró posiciones.db. Se creará nueva en la ejecución."
+          else
+            echo "✅ Base de datos restaurada correctamente."
+            ls -lh db/posiciones.db
+          fi
 
       - name: Ejecutar R-I-C-O Bot v5.0
         env:
-          EMAIL_DESTINO:  ${{ secrets.EMAIL_DESTINO }}
-          EMAIL_USUARIO:  ${{ secrets.EMAIL_USUARIO }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          SMTP_SERVER:    ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT:      ${{ secrets.SMTP_PORT }}
+          EMAIL_DESTINO:    ${{ secrets.EMAIL_DESTINO }}
+          EMAIL_USUARIO:    ${{ secrets.EMAIL_USUARIO }}
+          EMAIL_PASSWORD:   ${{ secrets.EMAIL_PASSWORD }}
+          SMTP_SERVER:      ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT:        ${{ secrets.SMTP_PORT }}
           USD_CLP_FALLBACK: ${{ secrets.USD_CLP_FALLBACK }}
           LLM_API_KEY:      ${{ secrets.LLM_API_KEY }}
           LLM_MODEL:        ${{ secrets.LLM_MODEL }}
           COMISION:         ${{ secrets.COMISION }}
           RISK_TARGET:      ${{ secrets.RISK_TARGET }}
+          DB_PATH:          db/posiciones.db
         run: python rico_bot.py
 
-      - name: Guardar log histórico
+      - name: Persistir Base de Datos (Artifact v4)
+        uses: actions/upload-artifact@v4
+        with:
+          name: posiciones-db-v5
+          path: db/posiciones.db
+          retention-days: 90
+          if-no-files-found: error  # Falla si el bot no generó la DB
+          overwrite: true           # Reemplaza artifact anterior mismo nombre
+
+      - name: Guardar log histórico en repo
         run: |
           if [ -f historico_decisiones.csv ]; then
             git config --local user.email "bot@rico.cl"
             git config --local user.name "R-I-C-O Bot"
             git add historico_decisiones.csv
-            git diff --cached --quiet || git commit -m "Log automatico — $(date +'%Y-%m-%d %H:%M')"
+            git diff --cached --quiet || git commit -m "Log automático — $(date +'%Y-%m-%d %H:%M')"
             git push
           fi
-
-      - name: Subir base de datos
-        uses: actions/upload-artifact@v3
-        with:
-          name: posiciones-db
-          path: db/posiciones.db
