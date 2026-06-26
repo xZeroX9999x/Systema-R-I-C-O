@@ -5,12 +5,7 @@
 #  FILOSOFÍA:
 #  - ETFs diversificados = buy-and-hold con DCA mensual fijo + rebalanceo
 #  - Acciones individuales = señales tácticas de RSI/momentum + gestión de riesgo
-#  - Evidencia: Dalbar 2024 muestra que el inversor promedio pierde ~8% anual
-#    intentando hacer timing. El DCA disciplinado + rebalanceo anual gana.
-#
-#  Ejecuta: GitHub Actions (cron semanal)
-#  Datos:   Yahoo Finance (yfinance) + SQLite + LLM
-#  Salida:  Correo HTML + log CSV + base de datos de posiciones
+#  - Escáner Buffett = Análisis de valor intrínseco y Moat económico en Watchlist
 # ============================================================================
 
 import os
@@ -77,9 +72,23 @@ def main():
         if r:
             resultados_acciones.append(r)
             logger.info(f"  RSI:{r['rsi']} | Score:{r['score']} | {r['senal']}")
+            
+    # 4b. Escáner de Oportunidades de Alta Ganancia (Filosofía Warren Buffett)
+    logger.info("Ejecutando escáner de valor Buffett en Watchlist de Vigilancia...")
+    from modules import buffett_engine
+    
+    oportunidades_encontradas = []
+    for simbolo in config.ACCIONES_VIGILANCIA_BUFFETT:
+        logger.info(f"Escaneando métricas Buffett para {simbolo}...")
+        res_buffett = buffett_engine.analizar_filosofia_buffett(simbolo)
+        if res_buffett and res_buffett["senal"] == "COMPRAR OPORTUNIDAD":
+            oportunidades_encontradas.append(res_buffett)
+            logger.info(f"  🔥 ¡OPORTUNIDAD DETECTADA!: {res_buffett['razon']}")
     
     if not resultados_etfs + resultados_acciones:
-        logger.error("No se pudo analizar ningún activo. Abortando.")
+        logger.error("No se pudo analizar ningún activo del portafolio base. Abortando.")
+        if db_conn:
+            db_conn.close()
         return
 
     # 5. Backtesting para validación de señales
@@ -91,7 +100,7 @@ def main():
     )
     logger.info(f"Backtest: Sharpe {backtest_results['sharpe']:.2f} | Max DD {backtest_results['max_drawdown']:.1%}")
 
-    # 6. Asignación por volatilidad targeting
+    # 6. Asignación por volatilidad targeting y motor de decisión
     logger.info("Calculando asignación por volatilidad...")
     decision_input = {
         'resultados_etfs': resultados_etfs,
@@ -102,6 +111,9 @@ def main():
     }
     decision_result = decision.ejecutar_motor(decision_input)
     
+    # Inyección segura de oportunidades Buffett para el ecosistema global de datos
+    decision_result['oportunidades_buffett'] = oportunidades_encontradas
+
     # 7. Contexto cualitativo (LLM)
     logger.info("Obteniendo contexto cualitativo...")
     contexto_llm = context.obtener_contexto_llm(
