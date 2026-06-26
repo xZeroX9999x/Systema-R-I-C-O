@@ -1,10 +1,15 @@
+# ============================================================================
+#  MÓDULO 2 — GESTIÓN DE ESTADO TRANSACTIONAL (CORREGIDO)
+# ============================================================================
+
 import sqlite3
 import os
+import csv
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from .config import load_settings  # ← Import relativo (crítico)
+from .config import load_settings
 
 logger = logging.getLogger(__name__)
 
@@ -90,15 +95,17 @@ def registrar_transacciones(
     cursor = conn.cursor()
     settings = load_settings()
 
-    # ETF
+    # 1. PROCESAR ETF CORE
     etf = decision_result.get('etf', {})
     if etf.get('simbolo'):
         ticker = etf['simbolo']
         monto = etf['monto']
         precio = next((r['precio'] for r in resultados if r['simbolo'] == ticker), 0.0)
         if precio > 0:
-            cantidad = monto / precio
+            # CORRECCIÓN: Conversión correcta usando tipo de cambio (CLP / (USD * TASA))
+            cantidad = monto / (precio * usd_clp)
             comision = monto * settings['COMISION']
+            
             cursor.execute(
                 "INSERT INTO transacciones (ticker, fecha, tipo, cantidad, precio, monto, comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (ticker, fecha_hora, 'COMPRA', cantidad, precio, monto, comision)
@@ -121,14 +128,16 @@ def registrar_transacciones(
                     (ticker, 'ETF', precio, cantidad, fecha_hora, precio, 'ACTIVA', fecha_hora)
                 )
 
-    # Acciones
+    # 2. PROCESAR ACCIONES TÁCTICAS
     for acc in decision_result.get('acciones', []):
         ticker = acc['simbolo']
         monto = acc['monto']
         precio = next((r['precio'] for r in resultados if r['simbolo'] == ticker), 0.0)
         if precio > 0:
-            cantidad = monto / precio
+            # CORRECCIÓN: Conversión de divisa integrada
+            cantidad = monto / (precio * usd_clp)
             comision = monto * settings['COMISION']
+            
             cursor.execute(
                 "INSERT INTO transacciones (ticker, fecha, tipo, cantidad, precio, monto, comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (ticker, fecha_hora, 'COMPRA', cantidad, precio, monto, comision)
@@ -152,12 +161,59 @@ def registrar_transacciones(
                 )
 
     conn.commit()
-    logger.info("Transacciones registradas.")
+    logger.info("Transacciones registradas en SQLite de forma balanceada.")
+
+    # 3. ACTUALIZAR HISTÓRICO CSV PARA GITHUB ACTIONS (CORRECCIÓN)
+    csv_path = "historico_decisiones.csv"
+    if os.path.exists(csv_path):
+        try:
+            regimen_estado = decision_result.get('regimen', {}).get('estado', 'NORMAL')
+            with open(csv_path, mode='a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                for r in resultados:
+                    if not r:
+                        continue
+                    
+                    # Calcular el monto adjudicado a este ticker específico
+                    monto_asignado = 0
+                    if decision_result.get('etf', {}).get('simbolo') == r['simbolo']:
+                        monto_asignado = decision_result['etf']['monto']
+                    for a in decision_result.get('acciones', []):
+                        if a['simbolo'] == r['simbolo']:
+                            monto_asignado = a['monto']
+                    
+                    # Mapeo idéntico de cabeceras estructurales
+                    writer.writerow([
+                        fecha_hora,
+                        r.get('simbolo'),
+                        r.get('tipo'),
+                        r.get('precio'),
+                        r.get('rsi'),
+                        r.get('rsi_semanal'),
+                        r.get('rsi_mensual'),
+                        r.get('momentum_6m'),
+                        r.get('momentum_12m'),
+                        r.get('ma20'),
+                        r.get('ma200'),
+                        r.get('volatilidad'),
+                        r.get('vol_ratio'),
+                        r.get('tendencia'),
+                        r.get('score'),
+                        r.get('senal'),
+                        monto_asignado,
+                        usd_clp,
+                        regimen_estado
+                    ])
+            logger.info("Archivo log histórico CSV sincronizado correctamente.")
+        except Exception as csv_err:
+            logger.error(f"Fallo al registrar líneas en histórico CSV: {csv_err}")
 
 
 def actualizar_maximos(conn: sqlite3.Connection, resultados: List[Dict], fecha_hora: str) -> None:
     cursor = conn.cursor()
     for r in resultados:
+        if not r:
+            continue
         ticker = r['simbolo']
         precio_actual = r['precio']
         cursor.execute(
