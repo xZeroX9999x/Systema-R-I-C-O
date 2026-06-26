@@ -1,5 +1,5 @@
 # ============================================================================
-#  MÓDULO 4 — BACKTESTING VECTORIZADO
+#  MÓDULO 4 — BACKTESTING VECTORIZADO (ESTABILIZADO)
 # ============================================================================
 
 import vectorbt as vbt
@@ -11,20 +11,9 @@ from modules.config import load_settings
 logger = logging.getLogger(__name__)
 
 def validar_senales(resultados_etfs: List[Dict], 
-                   resultados_acciones: List[Dict],
-                   comision: float = 0.0015) -> Dict[str, Any]:
-    """
-    Valida las señales del bot usando backtesting vectorizado.
-    
-    Args:
-        resultados_etfs: Resultados de análisis ETF
-        resultados_acciones: Resultados de análisis acciones
-        comision: Comisión por transacción
-        
-    Returns:
-        Métricas de rendimiento del backtest
-    """
-    # Validación de inputs
+                    resultados_acciones: List[Dict],
+                    comision: float = 0.0015) -> Dict[str, Any]:
+    """Valida las señales de estrategia dual usando backtesting vectorizado real"""
     if not resultados_etfs and not resultados_acciones:
         logger.error("No hay resultados de análisis para backtest. Saltando.")
         return {
@@ -36,25 +25,23 @@ def validar_senales(resultados_etfs: List[Dict],
             "detailed": {}
         }
     
-    # Preparar datos para backtest
     tickers = [r['simbolo'] for r in resultados_etfs + resultados_acciones if r]
     precios = {}
     
-    # Descargar datos históricos
+    # Descargar información histórica de control
     for ticker in tickers:
         try:
             data = vbt.YFData.download(ticker, period='5y').get('Close')
             if data is None or data.empty:
-                logger.warning(f"No se pudieron obtener datos para {ticker}")
+                logger.warning(f"No se pudieron obtener datos históricos para {ticker}")
                 continue
             precios[ticker] = data
         except Exception as e:
-            logger.warning(f"No se pudo descargar datos para {ticker}: {e}")
+            logger.warning(f"Error de red al descargar histórico de {ticker}: {e}")
             continue
     
-    # Si no hay datos, no se puede hacer backtest
     if not precios:
-        logger.warning("No hay datos suficientes para backtest. Saltando.")
+        logger.warning("Matriz de precios vacía. Saltando simulación vectorizada.")
         return {
             "sharpe": 0.0,
             "max_drawdown": 0.0,
@@ -64,41 +51,29 @@ def validar_senales(resultados_etfs: List[Dict],
             "detailed": {}
         }
     
-    # Crear señales de compra/venta
     senal_compra = {}
     senal_venta = {}
+    results = {}
     
     for ticker in tickers:
         if ticker not in precios:
             continue
             
-        # Crear señales basadas en las reglas del bot
         close = precios[ticker]
         rsi = vbt.RSI.run(close, 14).rsi
-        momentum = vbt.MACD.run(close).hist
+        macd = vbt.MACD.run(close)
+        momentum = macd.hist
         
-        # Señal de compra: RSI < 30 y momentum positivo
-        senal_compra[ticker] = rsi < 30
-        # Señal de venta: RSI > 70 y momentum negativo
-        senal_venta[ticker] = rsi > 70
+        # CORRECCIÓN: Se aplica la lógica dual unificada real (Condición + Histograma)
+        senal_compra[ticker] = (rsi < 30) & (momentum > 0)
+        senal_venta[ticker] = (rsi > 70) & (momentum < 0)
         
-    # Ejecutar backtest para cada activo
-    results = {}
-    for ticker in tickers:
-        if ticker not in precios:
-            continue
-            
-        # Asegurar que las señales estén alineadas con los precios
-        close = precios[ticker]
         buy_signals = senal_compra[ticker].reindex(close.index, fill_value=False)
         sell_signals = senal_venta[ticker].reindex(close.index, fill_value=False)
         
-        # Verificar que haya al menos una señal
         if not buy_signals.any() or not sell_signals.any():
-            logger.warning(f"No hay señales válidas para {ticker}. Saltando backtest.")
             continue
             
-        # Ejecutar portfolio
         try:
             pf = vbt.Portfolio.from_signals(
                 close=close,
@@ -109,30 +84,23 @@ def validar_senales(resultados_etfs: List[Dict],
                 init_cash=50000
             )
             
-            # Almacenar métricas
             results[ticker] = {
-                "sharpe": pf.sharpe_ratio(),
-                "max_drawdown": pf.max_drawdown(),
-                "win_rate": pf.win_rate(),
-                "profit_factor": pf.profit_factor(),
-                "total_return": pf.total_return()
+                "sharpe": float(np.nan_to_num(pf.sharpe_ratio())),
+                "max_drawdown": float(np.nan_to_num(pf.max_drawdown())),
+                "win_rate": float(np.nan_to_num(pf.win_rate())),
+                "profit_factor": float(np.nan_to_num(pf.profit_factor())),
+                "total_return": float(np.nan_to_num(pf.total_return()))
             }
         except Exception as e:
-            logger.error(f"Error en backtest para {ticker}: {e}")
+            logger.error(f"Inconsistencia matemática en portfolio de {ticker}: {e}")
             continue
-    
-    # Calcular métricas agregadas
+            
     if not results:
         return {
-            "sharpe": 0.0,
-            "max_drawdown": 0.0,
-            "win_rate": 0.0,
-            "profit_factor": 0.0,
-            "total_return": 0.0,
-            "detailed": results
+            "sharpe": 0.0, "max_drawdown": 0.0, "win_rate": 0.0, "profit_factor": 0.0, "total_return": 0.0, "detailed": {}
         }
     
-    # Promedios ponderados
+    # Consolidación geométrica promediada
     total_return = sum(r['total_return'] for r in results.values()) / len(results)
     sharpe = sum(r['sharpe'] for r in results.values()) / len(results)
     max_drawdown = min(r['max_drawdown'] for r in results.values())
