@@ -161,8 +161,9 @@ def analizar_etf(simbolo: str) -> Optional[Dict[str, Any]]:
             logger.warning(f"ETF {simbolo}: datos insuficientes")
             return None
 
-        # CORRECCIÓN CRÍTICA: Uso de Adj Close para evitar problemas con splits
-        precios = hist["Adj Close"].values
+        # CORRECCIÓN: 'Close' ya viene ajustado. Se eliminan NaNs para mercado en vivo.
+        hist = hist.dropna(subset=["Close"])
+        precios = hist["Close"].values
         volumenes = hist["Volume"].values
         precio_actual = round(float(precios[-1]), 2)
 
@@ -253,8 +254,9 @@ def analizar_accion(simbolo: str, historico_compras: Optional[Dict[str, float]] 
             logger.warning(f"Acción {simbolo}: datos insuficientes")
             return None
 
-        # CORRECCIÓN CRÍTICA: Uso de Adj Close para evitar problemas con splits
-        precios = hist["Adj Close"].values
+        # CORRECCIÓN: 'Close' ya viene ajustado. Se eliminan NaNs para mercado en vivo.
+        hist = hist.dropna(subset=["Close"])
+        precios = hist["Close"].values
         volumenes = hist["Volume"].values
         precio_actual = round(float(precios[-1]), 2)
 
