@@ -6,7 +6,7 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Dict, List, Any  # ← IMPORT CRÍTICO FALTANTE
+from typing import Dict, List, Any
 
 from .config import load_settings
 
@@ -47,7 +47,8 @@ def generar_html(resultados: List[Dict],
         .card-etf {{ border-left: 4px solid #00d4ff; }}
         .card-compra {{ border-left: 4px solid #27ae60; }}
         .card-venta {{ border-left: 4px solid #e74c3c; }}
-        .card-esperar {{ border-left: 4px solid #f39c12; }}        .card-neutro {{ border-left: 4px solid #555; }}
+        .card-esperar {{ border-left: 4px solid #f39c12; }}
+        .card-neutro {{ border-left: 4px solid #555; }}
         .ticker {{ font-size: 20px; font-weight: bold; color: #00d4ff; }}
         .badge {{ display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; color: white; }}
         .indicadores {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
@@ -96,7 +97,8 @@ def generar_html(resultados: List[Dict],
             info = av.get("alerta_venta", {})
             html += f"""<div class="alerta-roja">
                 ALERTA DE VENTA: {av['simbolo']} ({info.get('fase', '')})<br>
-                {info.get('etiqueta', '')}<br>                <small>RSI: {av.get('rsi', '')} | Surge 5d: {av.get('surge_semanal', '')}%</small>
+                {info.get('etiqueta', '')}<br>
+                <small>RSI: {av.get('rsi', '')} | Surge 5d: {av.get('surge_semanal', '')}%</small>
             </div>"""
 
     if decision.get("trailing_stops"):
@@ -145,7 +147,8 @@ def generar_html(resultados: List[Dict],
             clase_card = "card-neutro"
 
         monto_asignado = 0
-        if decision["etf"].get("simbolo") == r.get("simbolo"):            monto_asignado = decision["etf"].get("monto", 0)
+        if decision["etf"].get("simbolo") == r.get("simbolo"):
+            monto_asignado = decision["etf"].get("monto", 0)
         for acc in decision.get("acciones", []):
             if acc.get("simbolo") == r.get("simbolo"):
                 monto_asignado = acc.get("monto", 0)
@@ -194,7 +197,8 @@ def generar_html(resultados: List[Dict],
         html += '<div class="contexto-card"><h3 style="color:#00d4ff;">Contexto Cualitativo (LLM)</h3>'
         for ticker, ctx in contexto_llm.items():
             html += f"""
-            <div class="card">                <h4 style="color:#00d4ff;">{ticker}</h4>
+            <div class="card">
+                <h4 style="color:#00d4ff;">{ticker}</h4>
                 <p><b>Contexto:</b> {ctx.get('contexto', 'N/A')}</p>
                 <p><b>Riesgo clave:</b> {ctx.get('riesgo_clave', 'N/A')}</p>
                 <p><b>Confianza:</b> {ctx.get('confianza', 'N/A')}</p>
@@ -243,7 +247,8 @@ def enviar_correo(html: str, fecha_hora: str, settings: Dict[str, Any]) -> bool:
         # Puerto 465 = SSL directo; Puerto 587 = STARTTLS
         if port == 465:
             logger.info(f"Conectando vía SSL directo a {server_host}:{port}")
-            server = smtplib.SMTP_SSL(server_host, port, timeout=30)        else:
+            server = smtplib.SMTP_SSL(server_host, port, timeout=30)
+        else:
             logger.info(f"Conectando vía STARTTLS a {server_host}:{port}")
             server = smtplib.SMTP(server_host, port, timeout=30)
             server.ehlo()
