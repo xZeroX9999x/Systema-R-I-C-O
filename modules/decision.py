@@ -1,5 +1,5 @@
 # ============================================================================
-#  MÓDULO 7 — MOTOR DE DECISIÓN
+#  MÓDULO 7 — MOTOR DE DECISIÓN (CORREGIDO)
 # ============================================================================
 
 import logging
@@ -9,14 +9,13 @@ from modules.config import (
     APORTE_ETF_MENSUAL,
     APORTE_ACCIONES_MENSUAL,
     APORTE_CASH_MENSUAL,
-    ASIGNACION_ACCIONES,
-    ETFS_CORE
+    ASIGNACION_ACCIONES
 )
 
 logger = logging.getLogger(__name__)
 
 def ejecutar_motor(input_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Ejecuta el motor de decisión con todas las mejoras implementadas"""
+    """Ejecuta el motor de decisión con asignación por volatilidad y priorización"""
     resultados_etfs = input_data['resultados_etfs']
     resultados_acciones = input_data['resultados_acciones']
     historico_compras = input_data['historico_compras']
@@ -43,7 +42,7 @@ def ejecutar_motor(input_data: Dict[str, Any]) -> Dict[str, Any]:
     vt_resultado = next((r for r in resultados_etfs if r["simbolo"] == "VT"), None)
     regimen = technical.detectar_regimen_mercado(vt_resultado)
     
-    # 3. Analizar y asignar ETFs
+    # 3. Inicializar estructura de decisión
     decision = {
         "etf":            {"simbolo": None, "monto": 0, "razon": ""},
         "acciones":       [],
@@ -77,8 +76,7 @@ def ejecutar_motor(input_data: Dict[str, Any]) -> Dict[str, Any]:
             "razon":   f"Mejor momentum (6m: {mejor_etf['momentum_6m']}%, 12m: {mejor_etf['momentum_12m']}%)",
         }
     else:
-        decision["etf"] = {"simbolo": None, "monto": 0,
-                           "razon": "Todos los ETFs en circuit breaker"}
+        decision["etf"] = {"simbolo": None, "monto": 0, "razon": "Todos los ETFs en circuit breaker"}
         decision["reserva_cash"] += APORTE_ETF_MENSUAL
 
     # --- Acciones: si modo cautela, todo a reserva ---
@@ -89,13 +87,14 @@ def ejecutar_motor(input_data: Dict[str, Any]) -> Dict[str, Any]:
             f"{APORTE_ACCIONES_MENSUAL:,} CLP adicionales a reserva."
         )
     else:
-        # 4. Aplicar asignación por volatilidad targeting
+        # 4. Filtrar y ORDENAR acciones comprables por score de forma descendente
         comprables = [a for a in resultados_acciones if a and a.get("senal") == "COMPRAR"]
+        comprables.sort(key=lambda x: x.get("score", 0), reverse=True)
+        
         monto_disponible = APORTE_ACCIONES_MENSUAL
         
-        # Ajustar montos según volatilidad
+        # Ajustar montos según volatilidad targeting
         for i, accion in enumerate(comprables[:len(ASIGNACION_ACCIONES)]):
-            # Calcular monto basado en volatilidad
             monto = allocation.calcular_monto_vol_target(
                 precio=accion["precio"],
                 vol_anual_pct=accion["volatilidad"],
@@ -103,27 +102,30 @@ def ejecutar_motor(input_data: Dict[str, Any]) -> Dict[str, Any]:
                 capital=monto_disponible
             )
             
-            # Limitar a los montos predefinidos
+            # Limitar según matriz operativa de presupuesto
             monto = max(5000, min(monto, ASIGNACION_ACCIONES[i]))
             
+            # CORRECCIÓN: Se inyectan las llaves rsi y senal solicitadas por el módulo context.py
             decision["acciones"].append({
                 "simbolo": accion["simbolo"],
                 "monto":   monto,
+                "rsi":     accion["rsi"],
+                "senal":   accion["senal"],
                 "razon":   f"Score {accion['score']} | RSI {accion['rsi']} | Vol {accion['volatilidad']}%",
             })
             monto_disponible -= monto
         
-        # 5. Manejar sobrante
+        # 5. Manejar remanente presupuestario
         if monto_disponible > 0:
             decision["reserva_cash"] += monto_disponible
             decision["mensaje"] += f" {monto_disponible:,.0f} CLP sin oportunidad táctica → reserva."
 
-    # 6. Calcular total asignado
+    # 6. Calcular métricas finales de control monetario
     decision["total_asignado"] = (
         decision["etf"]["monto"] +
         sum(a["monto"] for a in decision["acciones"]) +
         decision["reserva_cash"]
     )
-    decision["sobrante"] = APORTE_ETF_MENSUAL + APORTE_ACCIONES_MENSUAL + APORTE_CASH_MENSUAL - decision["total_asignado"]
+    decision["sobrante"] = (APORTE_ETF_MENSUAL + APORTE_ACCIONES_MENSUAL + APORTE_CASH_MENSUAL) - decision["total_asignado"]
     
     return decision
