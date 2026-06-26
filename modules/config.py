@@ -1,5 +1,5 @@
 # ============================================================================
-#  MÓDULO 1 — CONFIGURACIÓN COMPLETA
+#  MÓDULO 1 — CONFIGURACIÓN COMPLETA Y CONSTANTES
 # ============================================================================
 
 import os
@@ -67,12 +67,15 @@ def load_settings() -> Dict[str, Any]:
 #  CONSTANTES DE CONFIGURACIÓN DEL BOT
 # ============================================================================
 
-# Clasificación de activos
+# Clasificación de activos del portafolio operativo habitual
 ETFS_CORE = ["VT", "ITOT"]
 ACCIONES_TACTICAS = ["NVDA", "IBIT", "CGW", "TTWO", "BBAI"]
 ALL_TICKERS = ETFS_CORE + ACCIONES_TACTICAS
 
-# Presupuesto y asignación
+# Acciones bajo observación estricta de Valor Intrínseco (Filosofía Warren Buffett)
+ACCIONES_VIGILANCIA_BUFFETT = ["AAPL", "MSFT", "GOOGL", "AMZN", "KO", "BRK-B", "COST", "V"]
+
+# Presupuesto y asignación monetaria mensual
 PRESUPUESTO_MENSUAL = 50000
 APORTE_ETF_MENSUAL = 30000
 APORTE_ACCIONES_MENSUAL = 17500
