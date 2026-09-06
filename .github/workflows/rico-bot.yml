@@ -40,6 +40,18 @@ jobs:
           path: db/
         continue-on-error: true
 
+      - name: Inicializar BD si no existe
+        run: |
+          if [ ! -f db/posiciones.db ]; then
+            echo "BD no encontrada. Creando archivo vacío..."
+            touch db/posiciones.db
+            echo "Archivo creado: db/posiciones.db"
+            ls -lh db/
+          else
+            echo "BD restaurada correctamente"
+            ls -lh db/posiciones.db
+          fi
+
       - name: Ejecutar R-I-C-O Bot v5.0
         env:
           PYTHONPATH: ${{ github.workspace }}
