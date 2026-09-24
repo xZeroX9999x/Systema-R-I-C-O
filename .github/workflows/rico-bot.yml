@@ -19,11 +19,10 @@ jobs:
       - name: Checkout repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: '3.11'
 
       - name: Instalar dependencias
         run: |
